@@ -1,0 +1,107 @@
+from flask import Flask, jsonify, request
+from flask_basicauth import BasicAuth
+
+# Create a Flask application instance
+app = Flask(__name__)
+
+# Basic Authentication Setup
+# Set up basic authentication credentials
+app.config['BASIC_AUTH_USERNAME'] = 'your_username'
+app.config['BASIC_AUTH_PASSWORD'] = 'your_password'
+# Initialize BasicAuth extension
+basic_auth = BasicAuth(app)
+
+# Task Model
+# Define a simple class representing a task
+class Task:
+    def __init__(self, id, title, description, completed=False):
+        self.id = id
+        self.title = title
+        self.description = description
+        self.completed = completed
+
+# Sample data for testing
+# Initialize a list of tasks with two sample tasks
+tasks = [
+    Task(1, 'Task 1', 'Description for Task 1'),
+    Task(2, 'Task 2', 'Description for Task 2'),
+]
+
+# API Endpoints
+
+# Retrieve all tasks
+@app.route('/tasks', methods=['GET'])
+def get_tasks():
+    # Convert the list of tasks to a JSON response
+    return jsonify({'tasks': [task.__dict__ for task in tasks]})
+
+# Retrieve a specific task by ID
+@app.route('/tasks/<int:task_id>', methods=['GET'])
+def get_task(task_id):
+    # Find the task with the specified ID or return an error if not found
+    task = next((task for task in tasks if task.id == task_id), None)
+    if task:
+        return jsonify(task.__dict__)
+    else:
+        return jsonify({'error': 'Task not found'}), 404
+
+# Create a new task
+@app.route('/tasks', methods=['POST'])
+@basic_auth.required  # Require basic authentication for this endpoint
+def create_task():
+    # Extract data from the request's JSON payload
+    data = request.get_json()
+    # Create a new task instance and append it to the tasks list
+    new_task = Task(id=len(tasks) + 1, title=data['title'], description=data['description'])
+    tasks.append(new_task)
+    # Return the new task as a JSON response with a 201 (Created) status code
+    return jsonify(new_task.__dict__), 201
+
+# Update an existing task
+@app.route('/tasks/<int:task_id>', methods=['PUT'])
+@basic_auth.required  # Require basic authentication for this endpoint
+def update_task(task_id):
+    # Find the task with the specified ID or return an error if not found
+    task = next((task for task in tasks if task.id == task_id), None)
+    if task:
+        # Update task attributes based on the request's JSON payload
+        data = request.get_json()
+        task.title = data['title']
+        task.description = data['description']
+        task.completed = data.get('completed', task.completed)
+        # Return the updated task as a JSON response
+        return jsonify(task.__dict__)
+    else:
+        # Return an error if the task is not found
+        return jsonify({'error': 'Task not found'}), 404
+
+# Delete a task
+@app.route('/tasks/<int:task_id>', methods=['DELETE'])
+@basic_auth.required  # Require basic authentication for this endpoint
+def delete_task(task_id):
+    global tasks
+    # Filter out the task with the specified ID from the tasks list
+    tasks = [task for task in tasks if task.id != task_id]
+    # Return a JSON response indicating the successful deletion
+    return jsonify({'result': 'Task deleted'})
+
+# Error Handling
+
+# Handle Bad Request (400)
+@app.errorhandler(400)
+def bad_request(error):
+    return jsonify({'error': 'Bad request'}), 400
+
+# Handle Unauthorized (401)
+@app.errorhandler(401)
+def unauthorized(error):
+    return jsonify({'error': 'Unauthorized'}), 401
+
+# Handle Not Found (404)
+@app.errorhandler(404)
+def not_found(error):
+    return jsonify({'error': 'Not found'}), 404
+
+# Run the application
+if __name__ == '__main__':
+    app.run(debug=True)
